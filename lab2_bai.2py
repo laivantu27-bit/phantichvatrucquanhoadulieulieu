@@ -1,0 +1,227 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime
+
+# ============================================
+# BÀI 2: PHÂN TÍCH DỮ LIỆU TÀI CHÍNH
+# ============================================
+
+print("="*70)
+print("PHÂN TÍCH DỮ LIỆU TÀI CHÍNH - GIÁ CỔ PHIẾU")
+print("="*70)
+
+# 1. CHỌN MÃ CỔ PHIẾU VÀ KHOẢNG THỜI GIAN
+ticker = "AAPL"  # Apple
+start_date = "2022-01-01"
+end_date = "2024-01-01"
+
+print(f"\nMã cổ phiếu: {ticker} (Apple Inc.)")
+print(f"Khoảng thời gian: {start_date} đến {end_date}")
+print(f"Khoảng thời gian: 2 năm")
+
+# 2. TẢI DỮ LIỆU TỪ YAHOO FINANCE
+print("\nĐang tải dữ liệu từ Yahoo Finance...")
+try:
+    stock = yf.download(ticker, start=start_date, end=end_date, progress=False)
+    
+    # Xử lý trường hợp yfinance trả về MultiIndex columns
+    if isinstance(stock.columns, pd.MultiIndex):
+        # Nếu MultiIndex, flatten các cột bằng cách lấy level 0
+        stock.columns = stock.columns.get_level_values(0)
+    
+    # Đảm bảo các cột tồn tại
+    if stock.empty:
+        print("Lỗi: Không thể tải dữ liệu. Vui lòng kiểm tra ticker hoặc kết nối mạng.")
+        exit(1)
+    
+    print(f"Các cột trong dữ liệu: {list(stock.columns)}")
+    
+    # Xử lý dữ liệu để đảm bảo là numeric
+    for col in ['Close', 'Open', 'High', 'Low', 'Volume', 'Adj Close']:
+        if col in stock.columns:
+            stock[col] = pd.to_numeric(stock[col], errors='coerce')
+    
+    # Loại bỏ các hàng có giá trị NaN
+    stock = stock.dropna()
+    
+    if stock.empty:
+        print("Lỗi: Không có dữ liệu hợp lệ sau xử lý.")
+        exit(1)
+    
+    print(f"Tổng số ngày giao dịch: {len(stock)}")
+    
+except Exception as e:
+    print(f"Lỗi khi tải dữ liệu: {e}")
+    print("Gợi ý: Hãy kiểm tra kết nối mạng và ticker cổ phiếu")
+    import traceback
+    traceback.print_exc()
+    exit(1)
+print("\nDữ liệu 5 ngày đầu tiên:")
+print(stock.head())
+
+print("\nDữ liệu 5 ngày cuối cùng:")
+print(stock.tail())
+
+print("\nThống kê cơ bản - Giá đóng cửa (Close):")
+print(f"  Giá cao nhất: ${float(stock['Close'].max()):.2f}")
+print(f"  Giá thấp nhất: ${float(stock['Close'].min()):.2f}")
+print(f"  Giá trung bình: ${float(stock['Close'].mean()):.2f}")
+print(f"  Độ lệch chuẩn: ${float(stock['Close'].std()):.2f}")
+
+# 3. TÍNH TOÁN CÁC CHỈ SỐ KỸ THUẬT
+print("\n" + "="*70)
+print("TÍNH TOÁN CHỈ SỐ KỸ THUẬT")
+print("="*70)
+
+# Tính trung bình động 50 ngày và 200 ngày
+stock["MA50"] = stock["Close"].rolling(window=50).mean()
+stock["MA200"] = stock["Close"].rolling(window=200).mean()
+
+# Tính tỷ lệ thay đổi ngày
+stock["Daily_Return"] = stock["Close"].pct_change() * 100
+
+# Tính tỷ lệ thay đổi từ đầu năm
+stock["YTD_Return"] = (stock["Close"] / stock["Close"].iloc[0] - 1) * 100
+
+print(f"\nMA50 (50-day Moving Average) được tính toán")
+print(f"MA200 (200-day Moving Average) được tính toán")
+print(f"Daily_Return (Tỷ lệ thay đổi hàng ngày) được tính toán")
+
+# 4. PHÂN TÍCH XU HƯỚNG
+print("\n" + "="*70)
+print("PHÂN TÍCH XU HƯỚNG")
+print("="*70)
+
+# Lấy giá đầu kỳ và cuối kỳ
+price_start = float(stock["Close"].iloc[0])
+price_end = float(stock["Close"].iloc[-1])
+price_change = price_end - price_start
+price_change_pct = (price_change / price_start) * 100
+
+print(f"\nGiá đóng cửa lúc bắt đầu ({start_date}): ${price_start:.2f}")
+print(f"Giá đóng cửa lúc kết thúc ({end_date}): ${price_end:.2f}")
+print(f"Thay đổi tuyệt đối: ${price_change:.2f}")
+print(f"Thay đổi phần trăm: {price_change_pct:.2f}%")
+
+if price_change_pct > 0:
+    print(f"XU HUONG: TANG (Up Trend) - Co phieu tang {price_change_pct:.2f}% trong 2 nam")
+else:
+    print(f"XU HUONG: GIAM (Down Trend) - Co phieu giam {abs(price_change_pct):.2f}% trong 2 nam")
+
+# Phân tích MA50 và MA200
+recent_close = float(stock["Close"].iloc[-1])
+recent_ma50 = float(stock["MA50"].iloc[-1])
+recent_ma200 = float(stock["MA200"].iloc[-1])
+
+print(f"\nGiá đóng cửa gần nhất: ${recent_close:.2f}")
+print(f"MA50 (trung bình 50 ngày): ${recent_ma50:.2f}")
+print(f"MA200 (trung bình 200 ngày): ${recent_ma200:.2f}")
+
+if recent_close > recent_ma50 > recent_ma200:
+    print("Tin hieu: XU HUONG TANG MANH (Strong Uptrend)")
+    print("   - Gia hien tai > MA50 > MA200")
+elif recent_close > recent_ma50:
+    print("Tin hieu: XU HUONG TANG (Uptrend)")
+    print("   - Gia hien tai > MA50")
+elif recent_close < recent_ma200:
+    print("Tin hieu: XU HUONG GIAM (Downtrend)")
+    print("   - Gia hien tai < MA200")
+else:
+    print("Tin hieu: XU HUONG TRUNG LAP (Neutral)")
+
+# Tính tỷ lệ ngày tăng/giảm
+total_trading_days = len(stock) - 1
+up_days = (stock["Daily_Return"] > 0).sum()
+down_days = (stock["Daily_Return"] < 0).sum()
+up_percentage = (up_days / total_trading_days) * 100
+
+print(f"\nThống kê ngày giao dịch:")
+print(f"  Tổng ngày giao dịch: {total_trading_days}")
+print(f"  Ngày tăng: {up_days} ({up_percentage:.1f}%)")
+print(f"  Ngày giảm: {down_days} ({100-up_percentage:.1f}%)")
+
+# 5. VẼ BIỂU ĐỒ
+print("\n" + "="*70)
+print("VẼ BIỂU ĐỒ")
+print("="*70)
+
+# Biểu đồ 1: Giá đóng cửa + Moving Averages
+plt.figure(figsize=(14, 7))
+plt.plot(stock.index, stock["Close"], label="Giá đóng cửa (Close)", linewidth=2, color='blue')
+plt.plot(stock.index, stock["MA50"], label="MA50 (50-day MA)", linewidth=2, color='orange', linestyle='--')
+plt.plot(stock.index, stock["MA200"], label="MA200 (200-day MA)", linewidth=2, color='red', linestyle='--')
+
+plt.title(f"Giá cổ phiếu {ticker} - {start_date} đến {end_date}", fontsize=14, fontweight='bold')
+plt.xlabel("Ngày", fontsize=12)
+plt.ylabel("Giá ($)", fontsize=12)
+plt.legend(loc='best', fontsize=11)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Biểu đồ 2: Tỷ lệ thay đổi hàng ngày
+plt.figure(figsize=(14, 6))
+colors = ['green' if x > 0 else 'red' for x in stock["Daily_Return"][1:]]
+plt.bar(stock.index[1:], stock["Daily_Return"][1:], color=colors, alpha=0.6, width=1)
+plt.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+plt.title(f"Tỷ lệ thay đổi hàng ngày - {ticker}", fontsize=14, fontweight='bold')
+plt.xlabel("Ngày", fontsize=12)
+plt.ylabel("Tỷ lệ thay đổi (%)", fontsize=12)
+plt.grid(True, alpha=0.3, axis='y')
+plt.tight_layout()
+plt.show()
+
+# Biểu đồ 3: Khối lượng giao dịch (nếu có)
+if 'Volume' in stock.columns:
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    
+    # Subplot 1: Giá
+    ax1.plot(stock.index, stock["Close"], color='blue', linewidth=2)
+    ax1.fill_between(stock.index, stock["Close"], alpha=0.3, color='blue')
+    ax1.set_ylabel("Giá ($)", fontsize=12)
+    ax1.set_title(f"Giá cổ phiếu và khối lượng giao dịch - {ticker}", fontsize=14, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
+    
+    # Subplot 2: Khối lượng
+    ax2.bar(stock.index, stock["Volume"], color='steelblue', alpha=0.5)
+    ax2.set_ylabel("Khối lượng giao dịch", fontsize=12)
+    ax2.set_xlabel("Ngày", fontsize=12)
+    ax2.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    plt.show()
+
+# 6. KẾT LUẬN
+print("\n" + "="*70)
+print("KẾT LUẬN")
+print("="*70)
+
+print(f"""
+Phan tich co phieu {ticker} tu {start_date} den {end_date}:
+
+1. XU HUONG GIA:
+   - Gia da thay doi {price_change_pct:.2f}% (${price_change:.2f})
+   - Xu huong: {'TANG UP' if price_change_pct > 0 else 'GIAM DOWN'}
+
+2. BIEN DONG GIA:
+   - Gia cao nhat: ${float(stock['Close'].max()):.2f}
+   - Gia thap nhat: ${float(stock['Close'].min()):.2f}
+   - Do lech chuan: ${float(stock['Close'].std()):.2f}
+
+3. CHI SO KY THUAT:
+   - MA50: ${recent_ma50:.2f}
+   - MA200: ${recent_ma200:.2f}
+   - Tin hieu: {'TANG' if recent_close > recent_ma50 else 'GIAM'}
+
+4. KHAC:
+   - Ngay tang: {up_percentage:.1f}%
+   - Ngay giam: {100-up_percentage:.1f}%
+
+LƯUU Y: Đây là phân tích kỹ thuật cơ bản, không phải lời khuyên đầu tư.
+""")
+
+print("="*70)
+print("[DONE] Phan tich hoan tat!")
+print("="*70)
